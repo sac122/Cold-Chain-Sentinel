@@ -1,0 +1,157 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "grafana-timestream-datasource", "name": "Amazon Timestream", "version": "2.0.0"}
+  ],
+  "annotations": {"list": []},
+  "description": "Cold-Chain Sentinel — Fleet Temperature & Incident Overview",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "grafana-timestream-datasource", "uid": "timestream"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 1, "fillOpacity": 5},
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "blue",  "value": null},
+              {"color": "green", "value": -20},
+              {"color": "yellow","value": -15},
+              {"color": "red",   "value": -10}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "datasource": {"type": "grafana-timestream-datasource"},
+          "rawQuery": "SELECT BIN(time, 30s) AS time, AVG(measure_value::double) AS avg_temp, device_id FROM \"$__database\".\"$__table\" WHERE measure_name = 'temp_c' AND $__timeFilter GROUP BY BIN(time, 30s), device_id ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet Temperature (°C) — 30s bins",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-timestream-datasource", "uid": "timestream"},
+      "fieldConfig": {
+        "defaults": {"unit": "percent", "min": 60, "max": 100}
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 9},
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-timestream-datasource"},
+          "rawQuery": "SELECT BIN(time, 1m) AS time, AVG(measure_value::double) AS humidity FROM \"$__database\".\"$__table\" WHERE measure_name = 'humidity' AND $__timeFilter GROUP BY BIN(time, 1m) ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Fleet Humidity (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-timestream-datasource", "uid": "timestream"},
+      "fieldConfig": {
+        "defaults": {"unit": "volt", "min": 10, "max": 13}
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 9},
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-timestream-datasource"},
+          "rawQuery": "SELECT BIN(time, 1m) AS time, MIN(measure_value::double) AS min_battery, device_id FROM \"$__database\".\"$__table\" WHERE measure_name = 'battery_v' AND $__timeFilter GROUP BY BIN(time, 1m), device_id ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Battery Voltage per Device",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-timestream-datasource", "uid": "timestream"},
+      "fieldConfig": {
+        "defaults": {"unit": "none"}
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 16},
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-timestream-datasource"},
+          "rawQuery": "SELECT BIN(time, 1m) AS time, AVG(measure_value::double) AS anomaly_score, device_id FROM \"$__database\".\"$__table\" WHERE measure_name = 'anomaly_score' AND measure_value::double IS NOT NULL AND $__timeFilter GROUP BY BIN(time, 1m), device_id ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "EWMA Anomaly Z-Score per Device",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "grafana-timestream-datasource", "uid": "timestream"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "color-background"},
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "Closed", "color": "green"}, "1": {"text": "OPEN", "color": "red"}}}
+          ]
+        }
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 16},
+      "id": 5,
+      "targets": [
+        {
+          "datasource": {"type": "grafana-timestream-datasource"},
+          "rawQuery": "SELECT device_id, LAST(measure_value::varchar) AS door_status FROM \"$__database\".\"$__table\" WHERE measure_name = 'door_open' AND $__timeFilter GROUP BY device_id",
+          "refId": "A"
+        }
+      ],
+      "title": "Door Status — Latest per Device",
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["coldchain", "iot", "temperature"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": {"type": "grafana-timestream-datasource"},
+        "definition": "databases()",
+        "hide": 0,
+        "includeAll": false,
+        "name": "__database",
+        "query": "databases()",
+        "refresh": 1,
+        "type": "query",
+        "label": "Timestream Database"
+      },
+      {
+        "current": {},
+        "datasource": {"type": "grafana-timestream-datasource"},
+        "definition": "tables($__database)",
+        "hide": 0,
+        "includeAll": false,
+        "name": "__table",
+        "query": "tables($__database)",
+        "refresh": 1,
+        "type": "query",
+        "label": "Timestream Table"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cold-Chain Sentinel Fleet Overview",
+  "uid": "coldchain-fleet",
+  "version": 1
+}

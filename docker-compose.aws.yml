@@ -1,0 +1,26 @@
+version: "3.9"
+
+# AWS override file — adds IoT Core bridge to the fog-processor.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d
+#
+# Prerequisites:
+#   1. Copy IoT certificates to ./certs/
+#      ./certs/device-cert.pem
+#      ./certs/private-key.pem
+#      ./certs/AmazonRootCA1.pem  (downloaded automatically in Dockerfile)
+#   2. Set AWS_IOT_ENDPOINT in .env:
+#      AWS_IOT_ENDPOINT=xxxxxxxxxxxxxxx-ats.iot.us-east-1.amazonaws.com
+
+services:
+  fog-processor:
+    volumes:
+      - ./certs:/certs:ro
+    environment:
+      AWS_IOT_ENDPOINT: "${AWS_IOT_ENDPOINT}"
+      AWS_IOT_PORT: 8883
+      AWS_IOT_CERT_PATH: /certs/device-cert.pem
+      AWS_IOT_KEY_PATH: /certs/private-key.pem
+      AWS_IOT_CA_PATH: /certs/AmazonRootCA1.pem
+      AWS_IOT_CLIENT_ID: fog-gateway-001
+      AWS_REGION: "${AWS_REGION:-us-east-1}"

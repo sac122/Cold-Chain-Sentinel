@@ -1,0 +1,22 @@
+apiVersion: 1
+
+datasources:
+  # Grafana JSON datasource pointing at the fog-processor metrics endpoint.
+  # Install plugin: grafana-simple-json-datasource
+  - name: FogProcessor
+    type: grafana-simple-json-datasource
+    access: proxy
+    url: http://fog-processor:8080
+    isDefault: false
+    editable: true
+
+  # Timestream datasource (requires grafana-timestream-datasource plugin)
+  # Configure AWS credentials via Grafana IAM role or environment variables.
+  - name: Timestream
+    type: grafana-timestream-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      authType: default          # uses EC2/ECS instance role
+      defaultRegion: us-east-1
+    editable: true

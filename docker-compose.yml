@@ -1,0 +1,147 @@
+version: "3.9"
+
+# Cold-Chain Sentinel — Local Development Stack
+#
+# Services:
+#   mosquitto     – Eclipse Mosquitto MQTT broker
+#   edge          – Edge processor (rules + anomaly detection)
+#   fog-processor – Fog gateway (local mode, no AWS)
+#   simulator     – IoT device simulator (10 devices, frozen cargo)
+#   grafana       – Grafana OSS dashboards (optional)
+#
+# Usage:
+#   docker compose up -d
+#   # Then inject a scenario:
+#   docker compose run --rm simulator python -m simulator.main \
+#       --devices 10 --incident compressor_fail
+#
+# To run against AWS IoT Core:
+#   See docker-compose.aws.yml (override file)
+
+networks:
+  coldchain:
+    driver: bridge
+
+volumes:
+  mosquitto_data:
+  fog_buffer:
+  grafana_data:
+
+services:
+  # ── MQTT Broker ─────────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: coldchain-mosquitto
+    restart: unless-stopped
+    networks: [coldchain]
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./fog/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Edge Processor ──────────────────────────────────────────────
+  edge:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+    container_name: coldchain-edge
+    restart: unless-stopped
+    networks: [coldchain]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      EDGE_DOWNSAMPLE_N: 10
+      EDGE_TEMP_MAX_C: -15.0
+      EDGE_DOOR_OPEN_SECONDS: 300
+      EDGE_BATTERY_LOW_V: 11.2
+      EDGE_EWMA_ALPHA: 0.1
+      EDGE_ANOMALY_ZSCORE: 3.0
+      LOG_LEVEL: INFO
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  # ── Fog Processor ───────────────────────────────────────────────
+  fog-processor:
+    build:
+      context: .
+      dockerfile: fog/fog-processor/Dockerfile
+    container_name: coldchain-fog
+    restart: unless-stopped
+    networks: [coldchain]
+    ports:
+      - "8080:8080"
+    volumes:
+      - fog_buffer:/data
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      FOG_HTTP_PORT: 8080
+      BUFFER_DB_PATH: /data/fog_buffer.db
+      BUFFER_MAX_SIZE: 10000
+      BUFFER_FLUSH_INTERVAL: 10
+      # Leave AWS_IOT_ENDPOINT empty for local-only mode
+      AWS_IOT_ENDPOINT: ""
+      LOG_LEVEL: INFO
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── IoT Simulator ───────────────────────────────────────────────
+  simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile
+    container_name: coldchain-simulator
+    restart: unless-stopped
+    networks: [coldchain]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      NUM_DEVICES: 10
+      PUBLISH_INTERVAL: 2.0
+      RANDOM_SEED: 42
+      CARGO_TYPE: frozen
+      LOG_LEVEL: INFO
+      # Uncomment to inject scenario on device-000:
+      # INCIDENTS: compressor_fail
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      edge:
+        condition: service_started
+
+  # ── Grafana OSS ─────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    container_name: coldchain-grafana
+    restart: unless-stopped
+    networks: [coldchain]
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: coldchain123
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_LOG_LEVEL: warn
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

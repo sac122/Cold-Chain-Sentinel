@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+env/
+.env
+*.env.local
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+cloud/terraform/.lambda_zips/
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IoT Certificates — NEVER commit private keys
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+junit*.xml
+
+# Data / logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+mosquitto/data/
+
+# Build
+*.zip

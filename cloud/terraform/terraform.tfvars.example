@@ -1,0 +1,27 @@
+# Rename to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars — it may contain sensitive values.
+
+aws_region   = "us-east-1"
+prefix       = "coldchain"
+alert_email  = "you@example.com"
+
+# Storage
+timestream_enabled       = true
+timestream_memory_hours  = 24
+timestream_magnetic_days = 90
+
+# ECS
+grafana_enabled          = true
+grafana_admin_password   = "ChangeMeNow123!"
+ecs_cpu                  = 256
+ecs_memory               = 512
+grafana_cpu              = 512
+grafana_memory           = 1024
+
+# Retention
+incident_ttl_days        = 90
+log_retention_days       = 30
+
+# Networking (leave empty to use default VPC)
+vpc_id     = ""
+subnet_ids = []
