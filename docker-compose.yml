@@ -132,11 +132,11 @@ services:
     restart: unless-stopped
     networks: [coldchain]
     ports:
-      - "5001:5001"
+      - "5050:5001"         # host:container — use 5050 to avoid port-5001 conflicts
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
-      DASH_PORT: 5001
+      DASH_PORT: 5001       # internal container port stays 5001
       TEMP_WARN_C: -15.0
       TEMP_CRIT_C: -10.0
       OFFLINE_SECS: 30
@@ -149,7 +149,7 @@ services:
       edge:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]   # container-internal port
       interval: 15s
       timeout: 5s
       retries: 5
