@@ -80,10 +80,14 @@ class AWSBridge:
                     extra={"label": label, "path": path},
                 )
 
+        # paho-mqtt 2.x requires an explicit callback_api_version.
+        # VERSION1 keeps the classic (1.x-compatible) callback signatures so
+        # nothing else in this class needs to change.
         client = mqtt.Client(
-            client_id  = self._cfg.AWS_IOT_CLIENT_ID,
-            protocol   = mqtt.MQTTv311,
-            clean_session = True,
+            callback_api_version = mqtt.CallbackAPIVersion.VERSION1,
+            client_id            = self._cfg.AWS_IOT_CLIENT_ID,
+            protocol             = mqtt.MQTTv311,
+            clean_session        = True,
         )
         client.tls_set(
             ca_certs   = self._cfg.AWS_IOT_CA_PATH,
