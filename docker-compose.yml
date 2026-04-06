@@ -123,6 +123,37 @@ services:
       edge:
         condition: service_started
 
+  # ── Dashboard (React UI + API) ──────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: coldchain-dashboard
+    restart: unless-stopped
+    networks: [coldchain]
+    ports:
+      - "5001:5001"
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      DASH_PORT: 5001
+      TEMP_WARN_C: -15.0
+      TEMP_CRIT_C: -10.0
+      OFFLINE_SECS: 30
+      HISTORY_LEN: 60
+      MAX_EVENTS: 200
+      LOG_LEVEL: INFO
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      edge:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   # ── Grafana OSS ─────────────────────────────────────────────────
   grafana:
     image: grafana/grafana-oss:10.4.2
