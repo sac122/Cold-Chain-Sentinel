@@ -18,6 +18,7 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -26,11 +27,12 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from dashboard.api.config import DashboardConfig
 from dashboard.api.state import StateManager
 from dashboard.api.ws_manager import ConnectionManager
-from shared.topics import SUB_ALL_EVENTS, SUB_ALL_TELEMETRY
+from shared.topics import SUB_ALL_EVENTS, SUB_ALL_TELEMETRY, control as ctrl_topic
 from shared.utils import get_logger, inc
 
 log   = get_logger("dashboard")
@@ -38,11 +40,15 @@ cfg   = DashboardConfig()
 state = StateManager()
 wsmgr = ConnectionManager()
 
+# Queue for outbound MQTT control commands (filled by REST endpoints,
+# drained by the publisher sub-task inside mqtt_subscriber).
+_cmd_queue: asyncio.Queue = asyncio.Queue()
+
 
 # ─── background tasks ────────────────────────────────────────────────────────
 
 async def mqtt_subscriber() -> None:
-    """Subscribe to edge-processed telemetry and events; update state + broadcast."""
+    """Subscribe to edge-processed telemetry/events; drain outbound cmd queue."""
     log.info("dashboard mqtt subscriber starting",
              extra={"broker": f"{cfg.MQTT_HOST}:{cfg.MQTT_PORT}"})
     while True:
@@ -58,32 +64,51 @@ async def mqtt_subscriber() -> None:
                 await client.subscribe(SUB_ALL_TELEMETRY, qos=0)
                 await client.subscribe(SUB_ALL_EVENTS,    qos=1)
 
-                async for msg in client.messages:
-                    topic   = str(msg.topic)
-                    kind    = topic.rsplit("/", 1)[-1]   # "telemetry" or "events"
-                    try:
-                        payload = json.loads(msg.payload)
-                    except Exception:
-                        continue
+                # ── Sub-task: drain outbound command queue ────────────────
+                async def publisher() -> None:
+                    while True:
+                        item = await _cmd_queue.get()
+                        try:
+                            await client.publish(
+                                item["topic"],
+                                payload=item["payload"],
+                                qos=1,
+                            )
+                            inc("dash.control_published")
+                        except Exception as exc:
+                            log.warning("control publish error",
+                                        extra={"error": str(exc)})
 
-                    if kind == "telemetry":
-                        snap = state.update_telemetry(payload)
-                        inc("dash.telemetry_received")
-                        await wsmgr.broadcast({
-                            "type":      "telemetry",
-                            "device_id": snap.device_id,
-                            "data":      snap.telemetry,
-                            "history":   snap.temp_history,
-                            "status":    snap.status,
-                        })
+                pub_task = asyncio.create_task(publisher())
+                try:
+                    async for msg in client.messages:
+                        topic   = str(msg.topic)
+                        kind    = topic.rsplit("/", 1)[-1]   # "telemetry" or "events"
+                        try:
+                            payload = json.loads(msg.payload)
+                        except Exception:
+                            continue
 
-                    elif kind == "events":
-                        state.add_event(payload)
-                        inc("dash.events_received")
-                        await wsmgr.broadcast({
-                            "type": "event",
-                            "data": payload,
-                        })
+                        if kind == "telemetry":
+                            snap = state.update_telemetry(payload)
+                            inc("dash.telemetry_received")
+                            await wsmgr.broadcast({
+                                "type":      "telemetry",
+                                "device_id": snap.device_id,
+                                "data":      snap.telemetry,
+                                "history":   snap.temp_history,
+                                "status":    snap.status,
+                            })
+
+                        elif kind == "events":
+                            state.add_event(payload)
+                            inc("dash.events_received")
+                            await wsmgr.broadcast({
+                                "type": "event",
+                                "data": payload,
+                            })
+                finally:
+                    pub_task.cancel()
 
         except aiomqtt.MqttError as exc:
             log.warning("mqtt disconnected, retrying in 5 s",
@@ -91,6 +116,15 @@ async def mqtt_subscriber() -> None:
             await asyncio.sleep(5)
         except asyncio.CancelledError:
             return
+
+
+# ─── helper: enqueue MQTT command ────────────────────────────────────────────
+
+async def _enqueue(device_id: str, cmd: dict) -> None:
+    topic   = ctrl_topic(device_id)
+    payload = json.dumps(cmd)
+    await _cmd_queue.put({"topic": topic, "payload": payload})
+    log.info("control enqueued", extra={"device_id": device_id, "cmd": cmd})
 
 
 async def stats_broadcaster() -> None:
@@ -150,6 +184,56 @@ async def list_events(limit: int = 100):
 @app.get("/api/stats")
 async def get_stats():
     return JSONResponse(state.get_stats())
+
+
+# ─── Control endpoints ────────────────────────────────────────────────────────
+# These publish MQTT commands to coldchain/control/{device_id}.
+# The simulator's control_listener picks them up and applies overrides.
+
+class DoorCmd(BaseModel):
+    open: bool
+
+class TempCmd(BaseModel):
+    value: Optional[float] = None   # None = clear override
+
+class BatteryCmd(BaseModel):
+    value: Optional[float] = None   # None = clear override
+
+class ScenarioCmd(BaseModel):
+    scenario: str
+    active: bool = True             # True = add, False = remove
+
+@app.post("/api/control/{device_id}/door")
+async def control_door(device_id: str, body: DoorCmd):
+    await _enqueue(device_id, {"cmd": "set_door", "value": body.open})
+    return {"ok": True, "device_id": device_id, "cmd": "set_door", "value": body.open}
+
+@app.post("/api/control/{device_id}/temp")
+async def control_temp(device_id: str, body: TempCmd):
+    if body.value is None:
+        await _enqueue(device_id, {"cmd": "set_temp", "value": None})
+    else:
+        await _enqueue(device_id, {"cmd": "set_temp", "value": body.value})
+    return {"ok": True, "device_id": device_id, "cmd": "set_temp", "value": body.value}
+
+@app.post("/api/control/{device_id}/battery")
+async def control_battery(device_id: str, body: BatteryCmd):
+    if body.value is None:
+        await _enqueue(device_id, {"cmd": "set_battery", "value": None})
+    else:
+        await _enqueue(device_id, {"cmd": "set_battery", "value": body.value})
+    return {"ok": True, "device_id": device_id, "cmd": "set_battery", "value": body.value}
+
+@app.post("/api/control/{device_id}/scenario")
+async def control_scenario(device_id: str, body: ScenarioCmd):
+    cmd = "add_scenario" if body.active else "clear_scenario"
+    await _enqueue(device_id, {"cmd": cmd, "scenario": body.scenario})
+    return {"ok": True, "device_id": device_id, "cmd": cmd, "scenario": body.scenario}
+
+@app.post("/api/control/{device_id}/reset")
+async def control_reset(device_id: str):
+    await _enqueue(device_id, {"cmd": "reset"})
+    return {"ok": True, "device_id": device_id, "cmd": "reset"}
 
 
 # ─── WebSocket ────────────────────────────────────────────────────────────────

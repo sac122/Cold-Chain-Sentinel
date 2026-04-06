@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from "react";
-import Header     from "./components/Header.jsx";
-import StatsBar   from "./components/StatsBar.jsx";
-import DeviceGrid from "./components/DeviceGrid.jsx";
-import EventFeed  from "./components/EventFeed.jsx";
+import Header       from "./components/Header.jsx";
+import StatsBar     from "./components/StatsBar.jsx";
+import DeviceGrid   from "./components/DeviceGrid.jsx";
+import EventFeed    from "./components/EventFeed.jsx";
 import DeviceDetail from "./components/DeviceDetail.jsx";
+import CommandCenter from "./components/CommandCenter.jsx";
 import { useWebSocket } from "./hooks/useWebSocket.js";
 
 const MAX_EVENTS = 200;
@@ -14,6 +15,7 @@ export default function App() {
   const [events,         setEvents]         = useState([]);
   const [stats,          setStats]          = useState({});
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [showControl,    setShowControl]    = useState(false);
 
   // When the user has a device detail open we want to keep it updated live
   const selectedIdRef = useRef(null);
@@ -86,7 +88,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <Header connected={connected} stats={stats} />
+      <Header
+        connected={connected}
+        stats={stats}
+        onToggleControl={() => setShowControl(x => !x)}
+        controlOpen={showControl}
+      />
 
       <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
         {/* Stats row */}
@@ -120,6 +127,14 @@ export default function App() {
         <DeviceDetail
           device={selectedDevice}
           onClose={() => setSelectedDevice(null)}
+        />
+      )}
+
+      {/* Simulator Command Center slide-over */}
+      {showControl && (
+        <CommandCenter
+          devices={devices}
+          onClose={() => setShowControl(false)}
         />
       )}
     </div>

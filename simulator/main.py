@@ -31,6 +31,7 @@ Example — 100 devices, all injecting a compressor failure on device-000:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
 import signal
@@ -44,8 +45,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import aiomqtt
 
 from simulator.config import SimulatorConfig
+from simulator.control import ControlRegistry
 from simulator.device import DeviceSimulator
 from simulator.scenarios import SCENARIO_REGISTRY
+from shared.topics import SUB_ALL_CONTROL
 from shared.utils import get_logger, get_metrics, inc
 
 log = get_logger("simulator")
@@ -55,14 +58,18 @@ log = get_logger("simulator")
 # Device factory
 # ---------------------------------------------------------------------------
 
-def build_devices(cfg: SimulatorConfig) -> list[DeviceSimulator]:
+def build_devices(
+    cfg: SimulatorConfig,
+    registry: ControlRegistry,
+) -> list[DeviceSimulator]:
     master_rng = random.Random(cfg.RANDOM_SEED)
     devices = []
     for i in range(cfg.NUM_DEVICES):
         device_id = f"{cfg.DEVICE_PREFIX}-{i:03d}"
         lat = master_rng.uniform(cfg.GPS_LAT_MIN, cfg.GPS_LAT_MAX)
         lon = master_rng.uniform(cfg.GPS_LON_MIN, cfg.GPS_LON_MAX)
-        # Only device-000 gets injected scenarios so output is predictable
+        # Only device-000 gets injected startup scenarios so output is predictable.
+        # ALL devices receive runtime commands via the control registry.
         incidents = cfg.incidents if i == 0 else []
         device_rng = random.Random(cfg.RANDOM_SEED + i * 1000)
         devices.append(DeviceSimulator(
@@ -73,8 +80,46 @@ def build_devices(cfg: SimulatorConfig) -> list[DeviceSimulator]:
             incidents        = incidents,
             lat              = lat,
             lon              = lon,
+            control_registry = registry,
         ))
     return devices
+
+
+# ---------------------------------------------------------------------------
+# Control listener (MQTT subscriber for runtime commands)
+# ---------------------------------------------------------------------------
+
+async def control_listener(
+    client: aiomqtt.Client,
+    registry: ControlRegistry,
+) -> None:
+    """
+    Subscribe to ``coldchain/control/+`` and forward commands to the registry.
+
+    Command topics:  coldchain/control/{device_id}
+    Payload (JSON):  {"cmd": "set_door", "value": true}
+                     {"cmd": "set_temp", "value": -5.0}
+                     {"cmd": "add_scenario", "scenario": "compressor_fail"}
+                     {"cmd": "reset"}
+    """
+    await client.subscribe(SUB_ALL_CONTROL, qos=1)
+    log.info("control channel subscribed", extra={"topic": SUB_ALL_CONTROL})
+    async for msg in client.messages:
+        topic = str(msg.topic)
+        parts = topic.split("/")
+        # Expected: coldchain / control / {device_id}
+        if len(parts) != 3 or parts[0] != "coldchain" or parts[1] != "control":
+            continue
+        device_id = parts[2]
+        try:
+            cmd = json.loads(msg.payload)
+        except Exception as exc:
+            log.warning("control msg parse error",
+                        extra={"topic": topic, "error": str(exc)})
+            continue
+        result = registry.apply_command(device_id, cmd)
+        log.info("control", extra={"device_id": device_id, "result": result})
+        inc("sim.control_commands")
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +150,8 @@ async def run_simulator(cfg: SimulatorConfig) -> None:
         },
     )
 
-    devices = build_devices(cfg)
+    registry = ControlRegistry()
+    devices  = build_devices(cfg, registry)
 
     # Retry-connect loop — the broker may not be ready immediately
     while True:
@@ -125,6 +171,7 @@ async def run_simulator(cfg: SimulatorConfig) -> None:
 
                 tasks = [asyncio.create_task(d.run(client)) for d in devices]
                 tasks.append(asyncio.create_task(_print_metrics()))
+                tasks.append(asyncio.create_task(control_listener(client, registry)))
 
                 try:
                     await asyncio.gather(*tasks)

@@ -25,6 +25,7 @@ from typing import Optional
 
 import aiomqtt
 
+from simulator.control import ControlRegistry, DeviceOverrides
 from simulator.scenarios import DeviceState, apply_scenarios
 from shared.schemas import GPSCoord, TelemetryPayload
 from shared.topics import raw as raw_topic
@@ -48,12 +49,14 @@ class DeviceSimulator:
         incidents: list[str],
         lat: float,
         lon: float,
+        control_registry: Optional[ControlRegistry] = None,
     ) -> None:
-        self.device_id       = device_id
-        self.nominal_temp    = nominal_temp
-        self.rng             = rng
-        self.publish_interval= publish_interval
-        self.incidents       = incidents
+        self.device_id        = device_id
+        self.nominal_temp     = nominal_temp
+        self.rng              = rng
+        self.publish_interval = publish_interval
+        self.incidents        = incidents
+        self._ctrl            = control_registry
 
         # Mutable device state
         self.state = DeviceState(
@@ -118,6 +121,24 @@ class DeviceSimulator:
 
         # Apply injected scenarios (they can override any of the above)
         apply_scenarios(self.state, self.incidents, t, rng)
+
+        # Apply runtime overrides from the control registry (highest priority)
+        if self._ctrl is not None:
+            ov: DeviceOverrides = self._ctrl.get(self.device_id)
+            # Extra scenarios injected via control channel
+            if ov.scenarios:
+                apply_scenarios(self.state, ov.scenarios, t, rng)
+            # Hard overrides — take effect after all scenario logic
+            if ov.door_open is not None:
+                self.state.door_open = ov.door_open
+                if ov.door_open and self._door_open_since is None:
+                    self._door_open_since = time.time()
+                elif not ov.door_open:
+                    self._door_open_since = None
+            if ov.temp_c is not None:
+                self.state.temp_c = ov.temp_c
+            if ov.battery_v is not None:
+                self.state.battery_v = ov.battery_v
 
         self._tick += 1
         self._seq  += 1

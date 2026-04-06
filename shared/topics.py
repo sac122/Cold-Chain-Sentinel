@@ -21,12 +21,14 @@ _TELEMETRY  = "coldchain/{device_id}/telemetry"
 _EVENTS     = "coldchain/{device_id}/events"
 _AWS_TEL    = "aws/coldchain/{device_id}/telemetry"
 _AWS_EVT    = "aws/coldchain/{device_id}/events"
+_CONTROL    = "coldchain/control/{device_id}"
 
 # ── Wildcard subscriptions ────────────────────────────────────────────────────
 
 SUB_ALL_RAW       = "coldchain/+/raw"
 SUB_ALL_TELEMETRY = "coldchain/+/telemetry"
 SUB_ALL_EVENTS    = "coldchain/+/events"
+SUB_ALL_CONTROL   = "coldchain/control/+"
 
 # ── Factory functions ─────────────────────────────────────────────────────────
 
@@ -44,6 +46,9 @@ def aws_telemetry(device_id: str) -> str:
 
 def aws_events(device_id: str) -> str:
     return _AWS_EVT.format(device_id=device_id)
+
+def control(device_id: str) -> str:
+    return _CONTROL.format(device_id=device_id)
 
 # ── Parsers ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
-import { Snowflake, Wifi, WifiOff, Activity } from "lucide-react";
+import { Snowflake, Wifi, WifiOff, Activity, Terminal } from "lucide-react";
 
-export default function Header({ connected, stats }) {
+export default function Header({ connected, stats, onToggleControl, controlOpen }) {
   const alertCount = stats?.active_alerts ?? 0;
 
   return (
@@ -19,7 +19,7 @@ export default function Header({ connected, stats }) {
         </div>
 
         {/* Right-side status */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
 
           {/* Alert badge */}
           {alertCount > 0 && (
@@ -47,6 +47,22 @@ export default function Header({ connected, stats }) {
             <span className={`w-2 h-2 rounded-full
                               ${connected ? "bg-emerald-400 animate-pulse" : "bg-slate-600"}`} />
           </div>
+
+          {/* Control Panel toggle */}
+          <button
+            onClick={onToggleControl}
+            title="Open Simulator Control Panel"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                        border transition-all
+                        ${controlOpen
+                          ? "bg-blue-600/30 border-blue-500 text-blue-300"
+                          : "bg-slate-800 border-slate-700 text-slate-300 hover:border-blue-500/60 hover:text-blue-300"
+                        }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Control</span>
+          </button>
+
         </div>
 
       </div>
