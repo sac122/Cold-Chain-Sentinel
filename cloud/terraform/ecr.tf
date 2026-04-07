@@ -1,52 +1,9 @@
 # ── ECR Repositories ──────────────────────────────────────────────────────────
+# One repo per custom Docker image.
+# Mosquitto uses the public Docker Hub image (eclipse-mosquitto:2.0.18) — no ECR needed.
 
-resource "aws_ecr_repository" "fog_processor" {
-  name                 = "${var.prefix}/fog-processor"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = {
-    Name = "${var.prefix}-fog-processor"
-  }
-}
-
-resource "aws_ecr_repository" "edge_processor" {
-  name                 = "${var.prefix}/edge-processor"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = {
-    Name = "${var.prefix}-edge-processor"
-  }
-}
-
-resource "aws_ecr_repository" "simulator" {
-  name                 = "${var.prefix}/simulator"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = {
-    Name = "${var.prefix}-simulator"
-  }
-}
-
-# Lifecycle policies — keep last 10 images, expire untagged after 7 days
-resource "aws_ecr_lifecycle_policy" "fog_processor" {
-  repository = aws_ecr_repository.fog_processor.name
-  policy = jsonencode({
+locals {
+  ecr_lifecycle_policy = jsonencode({
     rules = [
       {
         rulePriority = 1
@@ -72,4 +29,72 @@ resource "aws_ecr_lifecycle_policy" "fog_processor" {
       }
     ]
   })
+}
+
+# ── fog-processor ─────────────────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "fog_processor" {
+  name                 = "${var.prefix}/fog-processor"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration { scan_on_push = true }
+  encryption_configuration     { encryption_type = "AES256" }
+
+  tags = { Name = "${var.prefix}-fog-processor" }
+}
+
+resource "aws_ecr_lifecycle_policy" "fog_processor" {
+  repository = aws_ecr_repository.fog_processor.name
+  policy     = local.ecr_lifecycle_policy
+}
+
+# ── edge-processor ────────────────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "edge_processor" {
+  name                 = "${var.prefix}/edge-processor"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration { scan_on_push = true }
+  encryption_configuration     { encryption_type = "AES256" }
+
+  tags = { Name = "${var.prefix}-edge-processor" }
+}
+
+resource "aws_ecr_lifecycle_policy" "edge_processor" {
+  repository = aws_ecr_repository.edge_processor.name
+  policy     = local.ecr_lifecycle_policy
+}
+
+# ── simulator ─────────────────────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "simulator" {
+  name                 = "${var.prefix}/simulator"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration { scan_on_push = true }
+  encryption_configuration     { encryption_type = "AES256" }
+
+  tags = { Name = "${var.prefix}-simulator" }
+}
+
+resource "aws_ecr_lifecycle_policy" "simulator" {
+  repository = aws_ecr_repository.simulator.name
+  policy     = local.ecr_lifecycle_policy
+}
+
+# ── dashboard ─────────────────────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "dashboard" {
+  name                 = "${var.prefix}/dashboard"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration { scan_on_push = true }
+  encryption_configuration     { encryption_type = "AES256" }
+
+  tags = { Name = "${var.prefix}-dashboard" }
+}
+
+resource "aws_ecr_lifecycle_policy" "dashboard" {
+  repository = aws_ecr_repository.dashboard.name
+  policy     = local.ecr_lifecycle_policy
 }

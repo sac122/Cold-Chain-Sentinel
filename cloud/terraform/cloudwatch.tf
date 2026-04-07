@@ -1,9 +1,34 @@
 # ── CloudWatch Log Groups ─────────────────────────────────────────────────────
+# One log group per service. All are retention-bounded to save cost.
+
+resource "aws_cloudwatch_log_group" "mosquitto" {
+  name              = "/${var.prefix}/mosquitto"
+  retention_in_days = var.log_retention_days
+  tags              = { Name = "${var.prefix}-mosquitto-logs" }
+}
+
+resource "aws_cloudwatch_log_group" "edge_processor" {
+  name              = "/${var.prefix}/edge-processor"
+  retention_in_days = var.log_retention_days
+  tags              = { Name = "${var.prefix}-edge-processor-logs" }
+}
 
 resource "aws_cloudwatch_log_group" "fog_processor" {
   name              = "/${var.prefix}/fog-processor"
   retention_in_days = var.log_retention_days
   tags              = { Name = "${var.prefix}-fog-processor-logs" }
+}
+
+resource "aws_cloudwatch_log_group" "simulator" {
+  name              = "/${var.prefix}/simulator"
+  retention_in_days = var.log_retention_days
+  tags              = { Name = "${var.prefix}-simulator-logs" }
+}
+
+resource "aws_cloudwatch_log_group" "dashboard" {
+  name              = "/${var.prefix}/dashboard"
+  retention_in_days = var.log_retention_days
+  tags              = { Name = "${var.prefix}-dashboard-logs" }
 }
 
 resource "aws_cloudwatch_log_group" "lambda_alerts" {
@@ -45,7 +70,6 @@ resource "aws_cloudwatch_log_group" "grafana" {
 
 # ── CloudWatch Alarms ─────────────────────────────────────────────────────────
 
-# Alert when the Lambda error rate exceeds 5% over 5 minutes
 resource "aws_cloudwatch_metric_alarm" "alert_lambda_errors" {
   alarm_name          = "${var.prefix}-alert-lambda-errors"
   comparison_operator = "GreaterThanThreshold"
@@ -65,7 +89,6 @@ resource "aws_cloudwatch_metric_alarm" "alert_lambda_errors" {
   alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
-# Alert when DynamoDB throttling occurs
 resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
   alarm_name          = "${var.prefix}-dynamodb-throttle"
   comparison_operator = "GreaterThanThreshold"
@@ -85,6 +108,27 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttle" {
   alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
+# ECS service alarm — fires if fog-processor task count drops to 0
+resource "aws_cloudwatch_metric_alarm" "fog_processor_down" {
+  alarm_name          = "${var.prefix}-fog-processor-down"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "RunningTaskCount"
+  namespace           = "ECS/ContainerInsights"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 1
+  alarm_description   = "Fog processor ECS task count dropped to 0"
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.coldchain.name
+    ServiceName = aws_ecs_service.fog_processor.name
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
 # ── CloudWatch Dashboard ──────────────────────────────────────────────────────
 
 resource "aws_cloudwatch_dashboard" "coldchain" {
@@ -94,7 +138,7 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
     widgets = [
       {
         type       = "metric"
-        x          = 0; y = 0; width = 12; height = 6
+        x = 0; y = 0; width = 12; height = 6
         properties = {
           title  = "Lambda Invocations"
           period = 300
@@ -107,7 +151,7 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
       },
       {
         type       = "metric"
-        x          = 12; y = 0; width = 12; height = 6
+        x = 12; y = 0; width = 12; height = 6
         properties = {
           title  = "Lambda Errors"
           period = 300
@@ -120,24 +164,25 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
       },
       {
         type       = "metric"
-        x          = 0; y = 6; width = 12; height = 6
+        x = 0; y = 6; width = 12; height = 6
         properties = {
-          title  = "DynamoDB Consumed Write Units"
-          period = 300
-          stat   = "Sum"
+          title  = "ECS Running Task Count"
+          period = 60
+          stat   = "Average"
           metrics = [
-            ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", aws_dynamodb_table.incidents.name],
-            ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", aws_dynamodb_table.devices.name],
+            ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", aws_ecs_cluster.coldchain.name, "ServiceName", aws_ecs_service.fog_processor.name],
+            ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", aws_ecs_cluster.coldchain.name, "ServiceName", aws_ecs_service.mosquitto.name],
+            ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", aws_ecs_cluster.coldchain.name, "ServiceName", aws_ecs_service.dashboard.name],
           ]
         }
       },
       {
         type       = "log"
-        x          = 12; y = 6; width = 12; height = 6
+        x = 12; y = 6; width = 12; height = 6
         properties = {
-          title   = "Recent Incident Events"
-          query   = "SOURCE '/${var.prefix}/lambda-alerts' | filter msg = 'incident written to DynamoDB' | fields @timestamp, device_id, event_type, severity | sort @timestamp desc | limit 20"
-          region  = var.aws_region
+          title  = "Recent Alert Events"
+          query  = "SOURCE '/${var.prefix}/lambda-alerts' | filter msg = 'incident written to DynamoDB' | fields @timestamp, device_id, event_type, severity | sort @timestamp desc | limit 20"
+          region = var.aws_region
         }
       },
     ]

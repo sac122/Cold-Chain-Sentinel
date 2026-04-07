@@ -203,15 +203,28 @@ resource "aws_iam_role_policy" "ecs_task_inline" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # IoT certificate and config from SSM
       {
         Effect   = "Allow"
-        Action   = ["ssm:GetParameter"]
-        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/${var.prefix}/iot/*"
+        Action   = ["ssm:GetParameter", "ssm:GetParameters"]
+        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/${var.prefix}/*"
       },
+      # CloudWatch Logs for all Cold-Chain log groups (application-level)
       {
         Effect   = "Allow"
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = "${aws_cloudwatch_log_group.fog_processor.arn}:*"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"]
+        Resource = "arn:aws:logs:${local.region}:${local.account_id}:log-group:/${var.prefix}/*:*"
+      },
+      # ECS Exec (for `aws ecs execute-command` debugging)
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
       },
     ]
   })
