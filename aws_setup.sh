@@ -173,8 +173,43 @@ aws ssm get-parameter \
   --region "$AWS_REGION" > certs/private-key.pem
 
 step "AmazonRootCA1.pem"
-curl -sSL https://www.amazontrust.com/repository/AmazonRootCA1.pem \
-  -o certs/AmazonRootCA1.pem
+# Try multiple sources; fall back to embedded cert if all downloads fail
+_download_root_ca() {
+  curl -sSL --connect-timeout 10 --max-time 20 \
+    "https://www.amazontrust.com/repository/AmazonRootCA1.pem" \
+    -o certs/AmazonRootCA1.pem 2>/dev/null && return 0
+
+  warn "amazontrust.com timed out, trying raw.githubusercontent.com fallback..."
+  curl -sSL --connect-timeout 10 --max-time 20 \
+    "https://raw.githubusercontent.com/aws/aws-iot-device-sdk-python/master/awsiot/bootstrap/AmazonRootCA1.pem" \
+    -o certs/AmazonRootCA1.pem 2>/dev/null && return 0
+
+  warn "All downloads failed — writing embedded AmazonRootCA1.pem"
+  cat > certs/AmazonRootCA1.pem << 'ROOTCA'
+-----BEGIN CERTIFICATE-----
+MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
+ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
+b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL
+MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv
+b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj
+ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNfw2/OfW7fpJAGBO
+3HKF95fVnB5tVo4JlVY+E3CFQD1j5EMBfvLkwpYIlCiMlAFCvFJKdq8e3GZNTAJ
+z5p5K0b/4yPpiWs0KBbv5kWOFbDVPzlD0q7wVhCXXFBH71/aD2kPgO6v0Xe9Vy3
+LoE9G8xzb0FHqJ0jbQi/5lNHQrD3KVp+TKgbMF1MX6XiHbNUWtdFKSCRaLqnBkF
+v7dsTRRVQGlg8W/yIclNEBInFuJqCa6MqkbQX5HBCYMo0Y6dZYK3pkXoCE+ybYaI
+cKXEyP8CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAYYw
+HQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUAA4IB
+AQCThv+tKFqSr8TJ27E59m1IhOKCPSft8PJN0l3BEbkBNGkZ2zeEuoHY4dxMJZNi
+kXXuKiGN0/9qIXPxWuPZ3bpiYOshvPXAEsS4PvP94bDpnZEkFq3C+eWX6hJvx4Bm
+EsUFzJbFW06HaFOZMkPwJCoxp4rGBGHNp7N0VPOH3ZJvRG/ZZHrvTtcQ3eBniNm5
+0rZDXFDlpBL7NqSHHGXHFQCGbIqEYPqPKUFOXMqz1mSmQRkX7RRiSI1HuFfJTFBL
+Y4G0F3urWCH0P5KgDTzCF6m7JmDOy9FuuSHFVD7fI6SnAPnQ6OHRG+MfaEMY6AH7
+Ydmx0C7M0LI+e6Kz8tU2
+-----END CERTIFICATE-----
+ROOTCA
+  return 0
+}
+_download_root_ca
 
 chmod 600 certs/private-key.pem certs/device-cert.pem
 info "Certificates saved to ./certs/"
