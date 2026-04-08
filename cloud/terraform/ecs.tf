@@ -292,7 +292,7 @@ resource "aws_ecs_task_definition" "fog_processor" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   ephemeral_storage {
-    size_in_gib = 5   # for SQLite offline buffer
+    size_in_gib = 21   # for SQLite offline buffer
   }
 
   container_definitions = jsonencode([{

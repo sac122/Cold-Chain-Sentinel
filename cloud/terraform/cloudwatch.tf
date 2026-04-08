@@ -138,7 +138,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
     widgets = [
       {
         type       = "metric"
-        x = 0; y = 0; width = 12; height = 6
+        x = 0
+        y = 0
+        width = 12
+        height = 6
         properties = {
           title  = "Lambda Invocations"
           period = 300
@@ -151,7 +154,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
       },
       {
         type       = "metric"
-        x = 12; y = 0; width = 12; height = 6
+        x = 12 
+        y = 0
+        width = 12
+        height = 6
         properties = {
           title  = "Lambda Errors"
           period = 300
@@ -164,7 +170,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
       },
       {
         type       = "metric"
-        x = 0; y = 6; width = 12; height = 6
+        x = 0
+        y = 6
+        width = 12
+        height = 6
         properties = {
           title  = "ECS Running Task Count"
           period = 60
@@ -178,7 +187,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
       },
       {
         type       = "log"
-        x = 12; y = 6; width = 12; height = 6
+        x = 12
+        y = 6
+        width = 12
+        height = 6
         properties = {
           title  = "Recent Alert Events"
           query  = "SOURCE '/${var.prefix}/lambda-alerts' | filter msg = 'incident written to DynamoDB' | fields @timestamp, device_id, event_type, severity | sort @timestamp desc | limit 20"

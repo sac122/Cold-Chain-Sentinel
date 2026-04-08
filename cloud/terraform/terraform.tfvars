@@ -1,0 +1,52 @@
+# ── Cold-Chain Sentinel — Terraform Variables ────────────────────────────────
+# Rename this file to terraform.tfvars and fill in your values.
+# ⚠  NEVER commit terraform.tfvars — it contains your email and passwords.
+
+# ── Required ──────────────────────────────────────────────────────────────────
+aws_region   = "us-east-1"            # AWS region (e.g. us-east-1, eu-west-1)
+prefix       = "coldchain"            # Resource name prefix (keep short, lowercase, no spaces)
+alert_email  = "sachinrendla7@gmail.com"      # SNS alert email — you must confirm the subscription
+
+# ── Feature Flags ─────────────────────────────────────────────────────────────
+timestream_enabled = true             # Write telemetry to Amazon Timestream
+grafana_enabled    = false            # Deploy Grafana OSS on ECS (dashboard covers live view)
+simulator_enabled  = true             # Deploy the IoT simulator on ECS (cloud demo)
+
+# ── ECS Sizing ────────────────────────────────────────────────────────────────
+# 256 CPU  = 0.25 vCPU  (~$0.01/hr)
+# 512 CPU  = 0.5  vCPU  (~$0.02/hr)
+# 1024 CPU = 1    vCPU  (~$0.04/hr)
+
+mosquitto_cpu      = 256
+mosquitto_memory   = 512
+
+edge_cpu           = 256
+edge_memory        = 512
+
+ecs_cpu            = 256              # fog-processor
+ecs_memory         = 512
+
+simulator_cpu      = 512
+simulator_memory   = 1024
+simulator_num_devices = 10
+
+dashboard_cpu      = 512
+dashboard_memory   = 1024
+
+grafana_cpu        = 512
+grafana_memory     = 1024
+grafana_admin_password = "ChangeMeNow123!"
+
+# ── Retention / TTL ───────────────────────────────────────────────────────────
+incident_ttl_days        = 90         # DynamoDB TTL for incident records
+log_retention_days       = 30         # CloudWatch log group retention
+timestream_memory_hours  = 24         # Timestream hot storage
+timestream_magnetic_days = 90         # Timestream cold storage
+
+# ── Networking (leave empty to use default VPC) ───────────────────────────────
+# Uncomment and fill to use a specific VPC:
+# vpc_id     = "vpc-0abc123def456789"
+# subnet_ids = ["subnet-0aaa111", "subnet-0bbb222"]  # at least 2 for ALB
+
+vpc_id     = ""
+subnet_ids = []
