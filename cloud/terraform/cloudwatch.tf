@@ -143,9 +143,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
         width = 12
         height = 6
         properties = {
-          title  = "Lambda Invocations"
-          period = 300
-          stat   = "Sum"
+          title   = "Lambda Invocations"
+          region  = var.aws_region
+          period  = 300
+          stat    = "Sum"
           metrics = [
             ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.alert_handler.function_name],
             ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.api_handler.function_name],
@@ -159,9 +160,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
         width = 12
         height = 6
         properties = {
-          title  = "Lambda Errors"
-          period = 300
-          stat   = "Sum"
+          title   = "Lambda Errors"
+          region  = var.aws_region
+          period  = 300
+          stat    = "Sum"
           metrics = [
             ["AWS/Lambda", "Errors", "FunctionName", aws_lambda_function.alert_handler.function_name],
             ["AWS/Lambda", "Errors", "FunctionName", aws_lambda_function.api_handler.function_name],
@@ -175,9 +177,10 @@ resource "aws_cloudwatch_dashboard" "coldchain" {
         width = 12
         height = 6
         properties = {
-          title  = "ECS Running Task Count"
-          period = 60
-          stat   = "Average"
+          title   = "ECS Running Task Count"
+          region  = var.aws_region
+          period  = 60
+          stat    = "Average"
           metrics = [
             ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", aws_ecs_cluster.coldchain.name, "ServiceName", aws_ecs_service.fog_processor.name],
             ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", aws_ecs_cluster.coldchain.name, "ServiceName", aws_ecs_service.mosquitto.name],
