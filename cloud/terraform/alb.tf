@@ -9,7 +9,7 @@
 
 resource "aws_security_group" "alb" {
   name        = "${var.prefix}-alb-sg"
-  description = "Cold-Chain Dashboard ALB — public inbound HTTP"
+  description = "Cold-Chain Dashboard ALB - public inbound HTTP"
   vpc_id      = local.vpc_id
 
   # Allow HTTP from anywhere

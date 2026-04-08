@@ -98,6 +98,6 @@ resource "aws_dynamodb_table" "devices" {
 
   tags = {
     Name    = "${var.prefix}-devices"
-    Purpose = "Device registry — last known state per device"
+    Purpose = "Device registry - last known state per device"
   }
 }

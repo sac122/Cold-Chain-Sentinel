@@ -8,7 +8,7 @@ prefix       = "coldchain"            # Resource name prefix (keep short, lowerc
 alert_email  = "you@example.com"      # SNS alert email — you must confirm the subscription
 
 # ── Feature Flags ─────────────────────────────────────────────────────────────
-timestream_enabled = true             # Write telemetry to Amazon Timestream
+timestream_enabled = false            # Set true only if your account has Timestream enabled
 grafana_enabled    = false            # Deploy Grafana OSS on ECS (dashboard covers live view)
 simulator_enabled  = true             # Deploy the IoT simulator on ECS (cloud demo)
 

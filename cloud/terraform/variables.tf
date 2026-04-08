@@ -18,9 +18,9 @@ variable "alert_email" {
 # ── Feature flags ─────────────────────────────────────────────────────────────
 
 variable "timestream_enabled" {
-  description = "Create a Timestream database/table for telemetry storage"
+  description = "Create a Timestream database/table for telemetry storage (requires Timestream subscription)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "grafana_enabled" {

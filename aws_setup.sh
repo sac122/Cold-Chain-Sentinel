@@ -115,6 +115,7 @@ if [ "$SKIP_TERRAFORM" = false ]; then
     -var="aws_region=${AWS_REGION}" \
     -var="prefix=${PREFIX}" \
     -var="alert_email=${ALERT_EMAIL}" \
+    -var="timestream_enabled=false" \
     -out=tfplan \
     -input=false
 
